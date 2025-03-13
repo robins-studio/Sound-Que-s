@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<!-- saved from url=(0069)chrome-search://local-ntp/local-ntp.html?ntperror=19009&rid=undefined -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sound Queue Manager</title>
+    <script src="./Sound Queue Manager_files/wavesurfer.js.download"></script>
+    <style>
+        body { background-color: #121212; color: #ffffff; font-family: "Arial", sans-serif; display: flex; flex-direction: column; height: 100vh; }
+        .top-bar { display: flex; justify-content: space-between; background-color: #1c1c1c; padding: 10px 20px; border-bottom: 2px solid #FFD700; }
+        .tab { color: #FFD700; cursor: pointer; font-weight: bold; padding: 5px 15px; position: relative; }
+        .dropdown-content { display: none; position: absolute; background-color: #1c1c1c; border: 1px solid #FFD700; padding: 5px; top: 100%; left: 0; z-index: 1; }
+        .tab:hover .dropdown-content { display: block; }
+        .dropdown-content button { background-color: transparent; color: #FFD700; border: none; padding: 5px 10px; cursor: pointer; display: block; width: 100%; text-align: left; }
+        .left-panel { width: 100%; background-color: #1c1c1c; padding: 15px; display: flex; flex-direction: column; }
+        .queue-table { background-color: #292929; border: 1px solid #555; width: 100%; border-radius: 8px; color: #ffffff; }
+        .queue-table th, .queue-table td { padding: 8px; text-align: left; }
+        .queue-item.active { background-color: #FFD700; color: #121212; font-weight: bold; }
+        .go-button { background-color: transparent; color: #00FF00; border: 2px solid #00FF00; padding: 12px 24px; cursor: pointer; border-radius: 4px; font-weight: bold; position: absolute; top: 15px; right: 15px; }
+        #waveformContainer { background-color: #242424; padding: 15px; border-top: 2px solid #FFD700; height: 150px; width: 100%; border-radius: 8px; position: fixed; bottom: 0; display: block; }
+        #trackInfo { text-align: center; margin-bottom: 10px; font-size: 1em; font-weight: bold; }
+        #timeInfo { text-align: center; font-size: 0.9em; color: #FFD700; }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <div class="tab">Files
+            <div class="dropdown-content">
+                <input type="file" id="fileInput" multiple="">
+                <button onclick="saveProject()">Save Project</button>
+                <input type="file" id="importProjectInput" onchange="importProject(event)">
+            </div>
+        </div>
+    </div>
+
+    <div class="left-panel">
+        <button class="go-button" onclick="playNextQueue()">Go</button>
+        <table class="queue-table" id="queueList">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Track Name</th>
+                    <th>Play/Pause</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <div id="waveformContainer">
+        <div id="trackInfo"></div>
+        <div id="timeInfo"></div>
+        <div id="waveform"></div>
+    </div>
+
+    <script>
+        let tracks = [];
+        let wavesurfer = null;
+        let currentIndex = -1;
+
+        document.getElementById('fileInput').addEventListener('change', (event) => {
+            const files = Array.from(event.target.files);
+            files.forEach((file) => {
+                const track = {
+                    id: tracks.length,
+                    name: file.name,
+                    file: URL.createObjectURL(file),
+                    notes: ''
+                };
+                tracks.push(track);
+            });
+            updateQueueList();
+        });
+
+        function updateQueueList() {
+            const queueList = document.querySelector('#queueList tbody');
+            queueList.innerHTML = '';
+            tracks.forEach((track, index) => {
+                const row = document.createElement('tr');
+                row.className = index === currentIndex ? 'queue-item active' : '';
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${track.name}</td>
+                    <td><button onclick="toggleTrack(${index})">▶️/⏸️</button></td>
+                    <td><input type="text" placeholder="Add notes..." onchange="updateNotes(${index}, this.value)" value="${track.notes}"></td>
+                `;
+                queueList.appendChild(row);
+            });
+        }
+
+        function updateNotes(index, value) {
+            tracks[index].notes = value;
+        }
+
+        function toggleTrack(index) {
+            if (wavesurfer && currentIndex === index) {
+                wavesurfer.isPlaying() ? wavesurfer.pause() : wavesurfer.play();
+            } else {
+                playTrack(index);
+            }
+        }
+
+        function playNextQueue() {
+            if (currentIndex + 1 < tracks.length) {
+                playTrack(currentIndex + 1);
+            }
+        }
+
+        function playTrack(index) {
+            if (wavesurfer) {
+                wavesurfer.destroy();
+            }
+
+            currentIndex = index;
+            updateQueueList();
+
+            wavesurfer = WaveSurfer.create({
+                container: '#waveform',
+                waveColor: 'gray',
+                progressColor: '#FFD700'
+            });
+
+            wavesurfer.load(tracks[index].file);
+            document.getElementById('trackInfo').innerText = tracks[index].name;
+
+            wavesurfer.on('ready', () => {
+                updateTimeInfo(wavesurfer.getDuration(), 0);
+
+                wavesurfer.on('audioprocess', () => {
+                    updateTimeInfo(wavesurfer.getDuration(), wavesurfer.getCurrentTime());
+                });
+
+                wavesurfer.play();
+            });
+        }
+
+        function updateTimeInfo(duration, currentTime) {
+            const remainingTime = Math.max(0, duration - currentTime);
+            const formatTime = (time) => new Date(time * 1000).toISOString().substring(14, 19);
+            document.getElementById('timeInfo').innerText = `Duration: ${formatTime(duration)} | Time Left: ${formatTime(remainingTime)}`;
+        }
+    </script>
+
+
+</body></html>
